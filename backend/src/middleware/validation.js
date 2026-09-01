@@ -1,7 +1,5 @@
-const {
-  validateDeviceInput,
-  validateDeviceUpdateInput
-} = require('../utils/validators');
+const mongoose = require('mongoose');
+const { validateDeviceInput, validateDeviceUpdateInput } = require('../utils/validators');
 
 function sendValidationError(res, errors) {
   return res.status(400).json({
@@ -39,7 +37,16 @@ function validateDeviceIdentifier(req, res, next) {
   return next();
 }
 
+function validateAlertIdentifier(req, res, next) {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return sendValidationError(res, ['Alert identifier is invalid']);
+  }
+
+  return next();
+}
+
 module.exports = {
+  validateAlertIdentifier,
   validateCreateDevice,
   validateDeviceIdentifier,
   validateUpdateDevice

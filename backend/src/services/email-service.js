@@ -115,7 +115,10 @@ function getTimeSince(value, now = new Date()) {
     return 'No heartbeat received';
   }
 
-  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - new Date(value).getTime()) / 1000));
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now.getTime() - new Date(value).getTime()) / 1000)
+  );
   return formatDuration(elapsedSeconds);
 }
 
@@ -127,7 +130,10 @@ function getAlertDuration(alert, now = new Date()) {
     return 'Unknown';
   }
 
-  const elapsedSeconds = Math.max(0, Math.floor((new Date(resolvedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((new Date(resolvedAt).getTime() - new Date(startedAt).getTime()) / 1000)
+  );
   return formatDuration(elapsedSeconds);
 }
 

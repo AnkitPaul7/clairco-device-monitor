@@ -1,0 +1,29 @@
+.stats-card {
+  min-height: 112px;
+}
+
+.stats-card-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--clay-radius-sm);
+  background: var(--clay-primary-soft);
+  color: var(--clay-primary-dark);
+  box-shadow: var(--clay-shadow-pressed);
+}
+
+.stats-card-success .stats-card-icon {
+  background: #dcf5e7;
+  color: #1f7a53;
+}
+
+.stats-card-danger .stats-card-icon {
+  background: #fbdfe6;
+  color: #b13b5c;
+}
+
+.stats-card-warning .stats-card-icon {
+  background: #faedd3;
+  color: #a9711b;
+}

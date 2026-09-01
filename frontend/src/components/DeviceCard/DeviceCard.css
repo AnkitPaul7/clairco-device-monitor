@@ -1,0 +1,32 @@
+.device-card {
+  height: 100%;
+}
+
+.device-card-meta {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 14px;
+  border-radius: var(--clay-radius-sm);
+  background: var(--clay-bg);
+  box-shadow: var(--clay-shadow-pressed);
+}
+
+.device-card-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.device-card-meta dt {
+  color: var(--clay-text-secondary);
+  font-size: 13px;
+}
+
+.device-card-meta dd {
+  margin: 0;
+  color: var(--clay-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}

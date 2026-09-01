@@ -1,0 +1,9 @@
+{
+  "short_name": "Clairco",
+  "name": "Clairco Device Monitoring System",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0d9488",
+  "background_color": "#eef1f8"
+}

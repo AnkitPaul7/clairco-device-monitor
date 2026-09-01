@@ -1,0 +1,25 @@
+.alert-log .MuiListItem-root {
+  padding-right: 150px;
+}
+
+.alert-log .MuiDivider-root {
+  border-color: var(--clay-border);
+}
+
+.alert-log-title {
+  margin-bottom: 6px;
+}
+
+.alert-log-time {
+  display: block;
+  margin-top: 4px;
+  color: var(--clay-text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .alert-log .MuiListItem-root {
+    padding-right: 0;
+    flex-direction: column;
+  }
+}

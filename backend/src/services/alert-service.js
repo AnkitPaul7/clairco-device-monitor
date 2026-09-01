@@ -1,6 +1,6 @@
-const { Op } = require('sequelize');
 const { Alert, Device } = require('../models');
 const emailService = require('./email-service');
+const socketService = require('./socket-service');
 const { calculateDeviceStatus, createError, toPlainObject } = require('../utils/helpers');
 
 const ACTIVE_STATUS = 'active';
@@ -8,80 +8,86 @@ const RESOLVED_STATUS = 'resolved';
 const ACKNOWLEDGED_STATUS = 'acknowledged';
 
 function normalizeAlert(alert) {
-  return toPlainObject(alert);
-}
+  const plainAlert = toPlainObject(alert);
 
-function getDeviceId(device) {
-  return device.deviceId || device.device_id;
-}
-
-function getExpectedInterval(device) {
-  return Number(device.expectedInterval || device.expected_interval);
-}
-
-function getLastHeartbeat(device) {
-  return device.lastHeartbeat || device.last_heartbeat;
-}
-
-function getSecondsSinceLastHeartbeat(device, now = new Date()) {
-  const lastHeartbeat = getLastHeartbeat(device);
-
-  if (!lastHeartbeat) {
+  if (!plainAlert) {
     return null;
   }
 
-  return Math.max(0, Math.floor((now.getTime() - new Date(lastHeartbeat).getTime()) / 1000));
+  return {
+    id: plainAlert.id ? String(plainAlert.id) : String(plainAlert._id),
+    deviceId: plainAlert.deviceId,
+    triggeredAt: plainAlert.triggeredAt,
+    resolvedAt: plainAlert.resolvedAt,
+    message: plainAlert.message,
+    emailSent: plainAlert.emailSent,
+    status: plainAlert.status,
+    createdAt: plainAlert.createdAt,
+    updatedAt: plainAlert.updatedAt
+  };
+}
+
+function getSecondsSinceLastHeartbeat(device, now = new Date()) {
+  if (!device.lastHeartbeat) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor((now.getTime() - new Date(device.lastHeartbeat).getTime()) / 1000));
 }
 
 function buildAlertMessage(device, now = new Date()) {
   const secondsElapsed = getSecondsSinceLastHeartbeat(device, now);
-  const elapsedText = secondsElapsed === null ? 'no heartbeat has been received' : `${secondsElapsed} seconds elapsed`;
+  const elapsedText =
+    secondsElapsed === null
+      ? 'no heartbeat has been received'
+      : `${secondsElapsed} seconds elapsed`;
 
-  return `Device ${device.name} (${getDeviceId(device)}) missed expected heartbeat interval of ${getExpectedInterval(device)} seconds; ${elapsedText}.`;
+  return `Device ${device.name} (${device.deviceId}) missed expected heartbeat interval of ${device.expectedInterval} seconds; ${elapsedText}.`;
 }
 
 async function getActiveAlertForDevice(deviceId) {
   return Alert.findOne({
-    where: {
-      deviceId,
-      status: ACTIVE_STATUS
-    }
+    deviceId,
+    status: ACTIVE_STATUS
   });
 }
 
 async function createAlertForDevice(device, options = {}) {
   const plainDevice = toPlainObject(device);
-  const deviceId = getDeviceId(plainDevice);
-  const existingAlert = await getActiveAlertForDevice(deviceId);
+  const existingAlert = await getActiveAlertForDevice(plainDevice.deviceId);
 
   if (existingAlert) {
     return normalizeAlert(existingAlert);
   }
 
   const now = options.now || new Date();
-  const message = options.message || buildAlertMessage(plainDevice, now);
   const alert = await Alert.create({
-    deviceId,
-    message,
+    deviceId: plainDevice.deviceId,
+    triggeredAt: now,
+    message: options.message || buildAlertMessage(plainDevice, now),
     status: ACTIVE_STATUS,
     emailSent: false
   });
 
-  const plainAlert = normalizeAlert(alert);
-
   try {
-    await emailService.sendAlertEmail(plainAlert, plainDevice, {
+    await emailService.sendAlertEmail(normalizeAlert(alert), plainDevice, {
       timeSinceLastHeartbeat: `${getSecondsSinceLastHeartbeat(plainDevice, now)} seconds`
     });
-    await alert.update({ emailSent: true });
-    plainAlert.emailSent = true;
+    alert.emailSent = true;
+    await alert.save();
   } catch (error) {
-    await alert.update({ emailSent: false });
-    plainAlert.emailSent = false;
-    console.error(`Failed to send alert email for ${deviceId}`, error);
+    alert.emailSent = false;
+    await alert.save();
+    console.error(`Failed to send alert email for ${plainDevice.deviceId}`, error);
   }
 
-  return plainAlert;
+  const createdAlert = normalizeAlert(alert);
+  socketService.emitToAll('alert:created', {
+    alert: createdAlert,
+    timestamp: new Date().toISOString()
+  });
+
+  return createdAlert;
 }
 
 async function resolveActiveAlertForDevice(deviceId, options = {}) {
@@ -91,17 +97,19 @@ async function resolveActiveAlertForDevice(deviceId, options = {}) {
     return null;
   }
 
-  const resolvedAt = options.resolvedAt || new Date();
-  await activeAlert.update({
-    status: RESOLVED_STATUS,
-    resolvedAt
-  });
+  activeAlert.status = RESOLVED_STATUS;
+  activeAlert.resolvedAt = options.resolvedAt || new Date();
+  await activeAlert.save();
 
   const resolvedAlert = normalizeAlert(activeAlert);
+  socketService.emitToAll('alert:resolved', {
+    alert: resolvedAlert,
+    timestamp: new Date().toISOString()
+  });
 
   if (options.sendRecoveryEmail) {
     try {
-      const device = options.device || await Device.findOne({ where: { deviceId } });
+      const device = options.device || (await Device.findOne({ deviceId }));
       if (device) {
         await emailService.sendRecoveryEmail(resolvedAlert, toPlainObject(device));
       }
@@ -114,33 +122,46 @@ async function resolveActiveAlertForDevice(deviceId, options = {}) {
 }
 
 async function acknowledgeAlert(id) {
-  const alert = await Alert.findByPk(id);
+  const alert = await Alert.findById(id);
 
   if (!alert) {
     throw createError('Alert not found', 404);
   }
 
-  await alert.update({ status: ACKNOWLEDGED_STATUS });
-  return normalizeAlert(alert);
+  alert.status = ACKNOWLEDGED_STATUS;
+  await alert.save();
+
+  const acknowledgedAlert = normalizeAlert(alert);
+  socketService.emitToAll('alert:acknowledged', {
+    alert: acknowledgedAlert,
+    timestamp: new Date().toISOString()
+  });
+
+  return acknowledgedAlert;
 }
 
 async function resolveAlert(id) {
-  const alert = await Alert.findByPk(id);
+  const alert = await Alert.findById(id);
 
   if (!alert) {
     throw createError('Alert not found', 404);
   }
 
-  await alert.update({
-    status: RESOLVED_STATUS,
-    resolvedAt: new Date()
+  alert.status = RESOLVED_STATUS;
+  alert.resolvedAt = new Date();
+  await alert.save();
+
+  const resolvedAlert = normalizeAlert(alert);
+  socketService.emitToAll('alert:resolved', {
+    alert: resolvedAlert,
+    timestamp: new Date().toISOString()
   });
 
-  return normalizeAlert(alert);
+  return resolvedAlert;
 }
 
 async function getAlertById(id) {
-  const alert = await Alert.findByPk(id);
+  const alert = await Alert.findById(id);
 
   if (!alert) {
     throw createError('Alert not found', 404);
@@ -150,69 +171,70 @@ async function getAlertById(id) {
 }
 
 function buildAlertFilters(query = {}) {
-  const where = {};
+  const filter = {};
 
-  if (query.deviceId) {
-    where.deviceId = query.deviceId;
+  if (query.deviceId && typeof query.deviceId === 'string') {
+    filter.deviceId = query.deviceId;
   }
 
-  if (query.status) {
-    where.status = query.status;
+  if (query.status && typeof query.status === 'string') {
+    filter.status = query.status;
   }
 
   if (query.from || query.to) {
-    where.triggeredAt = {};
+    filter.triggeredAt = {};
 
     if (query.from) {
-      where.triggeredAt[Op.gte] = new Date(query.from);
+      filter.triggeredAt.$gte = new Date(query.from);
     }
 
     if (query.to) {
-      where.triggeredAt[Op.lte] = new Date(query.to);
+      filter.triggeredAt.$lte = new Date(query.to);
     }
   }
 
-  return where;
+  return filter;
+}
+
+function toSafeInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
 async function getAlerts(query = {}) {
-  const page = Math.max(1, Number(query.page || 1));
-  const limit = Math.min(100, Math.max(1, Number(query.limit || 20)));
-  const offset = (page - 1) * limit;
-  const where = buildAlertFilters(query);
+  const page = Math.max(1, toSafeInteger(query.page, 1));
+  const limit = Math.min(100, Math.max(1, toSafeInteger(query.limit, 20)));
+  const skip = (page - 1) * limit;
+  const filter = buildAlertFilters(query);
 
-  const result = await Alert.findAndCountAll({
-    where,
-    limit,
-    offset,
-    order: [['triggeredAt', 'DESC']]
-  });
+  const [rows, count] = await Promise.all([
+    Alert.find(filter).sort({ triggeredAt: -1 }).skip(skip).limit(limit),
+    Alert.countDocuments(filter)
+  ]);
 
   return {
-    data: result.rows.map(normalizeAlert),
+    data: rows.map(normalizeAlert),
     pagination: {
       page,
       limit,
-      total: result.count,
-      totalPages: Math.ceil(result.count / limit)
+      total: count,
+      totalPages: Math.ceil(count / limit)
     }
   };
 }
 
 async function getActiveAlertsCount() {
-  return Alert.count({
-    where: {
-      status: ACTIVE_STATUS
-    }
+  return Alert.countDocuments({
+    status: ACTIVE_STATUS
   });
 }
 
 async function getAlertStatistics() {
   const [total, active, resolved, acknowledged] = await Promise.all([
-    Alert.count(),
-    Alert.count({ where: { status: ACTIVE_STATUS } }),
-    Alert.count({ where: { status: RESOLVED_STATUS } }),
-    Alert.count({ where: { status: ACKNOWLEDGED_STATUS } })
+    Alert.countDocuments(),
+    Alert.countDocuments({ status: ACTIVE_STATUS }),
+    Alert.countDocuments({ status: RESOLVED_STATUS }),
+    Alert.countDocuments({ status: ACKNOWLEDGED_STATUS })
   ]);
 
   return {

@@ -9,14 +9,15 @@ describeDb('alert-service database integration', () => {
     models = require('../../../src/models');
     alertService = require('../../../src/services/alert-service');
 
-    if (models.sequelize) {
-      await models.sequelize.authenticate();
+    if (models.mongoose.connection.readyState === 0) {
+      const connectDB = require('../../../src/config/database');
+      await connectDB(process.env.MONGODB_URI);
     }
   });
 
   afterAll(async () => {
-    if (models?.sequelize) {
-      await models.sequelize.close();
+    if (models?.mongoose) {
+      await models.mongoose.disconnect();
     }
   });
 
@@ -36,11 +37,9 @@ describeDb('alert-service database integration', () => {
 
     expect(secondAlert.id).toBe(firstAlert.id);
 
-    const activeCount = await models.Alert.count({
-      where: {
-        deviceId,
-        status: 'active'
-      }
+    const activeCount = await models.Alert.countDocuments({
+      deviceId,
+      status: 'active'
     });
 
     expect(activeCount).toBe(1);
@@ -48,6 +47,7 @@ describeDb('alert-service database integration', () => {
     const resolvedAlert = await alertService.resolveActiveAlertForDevice(deviceId);
     expect(resolvedAlert.status).toBe('resolved');
 
-    await device.update({ isActive: false });
+    device.isActive = false;
+    await device.save();
   });
 });

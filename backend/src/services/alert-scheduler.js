@@ -20,9 +20,13 @@ class AlertScheduler {
 
     this.isRunning = true;
     this.logger.info(`Alert scheduler started with ${this.intervalMs}ms interval`);
-    this.checkDevices().catch((error) => this.logger.error('Initial alert scheduler check failed', error));
+    this.checkDevices().catch((error) =>
+      this.logger.error('Initial alert scheduler check failed', error)
+    );
     this.timer = setInterval(() => {
-      this.checkDevices().catch((error) => this.logger.error('Alert scheduler check failed', error));
+      this.checkDevices().catch((error) =>
+        this.logger.error('Alert scheduler check failed', error)
+      );
     }, this.intervalMs);
   }
 
@@ -46,9 +50,7 @@ class AlertScheduler {
     this.isChecking = true;
 
     try {
-      const devices = await this.deviceModel.findAll({
-        where: { isActive: true }
-      });
+      const devices = await this.deviceModel.find({ isActive: true });
 
       const summary = {
         checked: devices.length,
@@ -65,7 +67,7 @@ class AlertScheduler {
         if (status === 'offline') {
           const before = await this.alertService.getActiveAlertForDevice(deviceId);
           await this.alertService.createAlertForDevice(plainDevice, { now });
-          const after = before || await this.alertService.getActiveAlertForDevice(deviceId);
+          const after = before || (await this.alertService.getActiveAlertForDevice(deviceId));
 
           if (!before && after) {
             summary.created += 1;

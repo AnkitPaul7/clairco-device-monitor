@@ -59,11 +59,13 @@ describe('devices API', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
-    expect(response.body.errors).toEqual(expect.arrayContaining([
-      'Device ID must contain only letters, numbers, hyphens, and underscores',
-      'Device name must be at least 2 characters',
-      'Expected interval must be between 5 and 86400 seconds'
-    ]));
+    expect(response.body.errors).toEqual(
+      expect.arrayContaining([
+        'Device ID must contain only letters, numbers, hyphens, and underscores',
+        'Device name must be at least 2 characters',
+        'Expected interval must be between 5 and 86400 seconds'
+      ])
+    );
   });
 
   it('POST /api/devices creates a device', async () => {

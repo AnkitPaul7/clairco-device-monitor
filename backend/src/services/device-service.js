@@ -1,51 +1,42 @@
-const { Op } = require('sequelize');
-const { Device } = require('../models');
-const {
-  createError,
-  formatDeviceListResponse,
-  formatDeviceResponse
-} = require('../utils/helpers');
+const { mongoose, Device } = require('../models');
+const { createError, formatDeviceListResponse, formatDeviceResponse } = require('../utils/helpers');
 const { sanitizeDeviceInput } = require('../utils/validators');
 
-function buildDeviceLookup(id) {
-  return {
-    [Op.or]: [
-      { id },
-      { deviceId: id }
-    ]
-  };
+function buildDeviceLookup(identifier, includeInactive = false) {
+  const or = [{ deviceId: identifier }];
+
+  if (mongoose.Types.ObjectId.isValid(identifier)) {
+    or.push({ _id: identifier });
+  }
+
+  const filter = { $or: or };
+
+  if (!includeInactive) {
+    filter.isActive = true;
+  }
+
+  return filter;
 }
 
 function isDuplicateDeviceError(error) {
-  return (
-    error &&
-    (error.name === 'SequelizeUniqueConstraintError' ||
-      error.name === 'SequelizeValidationError' ||
-      error.original?.code === '23505')
-  );
+  return error && error.code === 11000;
 }
 
 async function getAllDevices(options = {}) {
-  const where = {};
+  const filter = {};
 
   if (!options.includeInactive) {
-    where.isActive = true;
+    filter.isActive = true;
   }
 
-  const devices = await Device.findAll({
-    where,
-    order: [['createdAt', 'DESC']]
-  });
-
+  const devices = await Device.find(filter).sort({ createdAt: -1 });
   return formatDeviceListResponse(devices);
 }
 
 async function getDeviceById(id) {
-  const device = await Device.findOne({
-    where: buildDeviceLookup(id)
-  });
+  const device = await Device.findOne(buildDeviceLookup(id));
 
-  if (!device || device.isActive === false) {
+  if (!device) {
     throw createError('Device not found', 404);
   }
 
@@ -57,15 +48,14 @@ async function ensureDeviceIdIsUnique(deviceId, existingId = null) {
     return;
   }
 
-  const existingDevice = await Device.findOne({
-    where: { deviceId }
-  });
+  const existingDevice = await Device.findOne({ deviceId });
 
   if (!existingDevice) {
     return;
   }
 
-  if (existingId && String(existingDevice.id) === String(existingId)) {
+  const existingObjectId = existingDevice.id || existingDevice._id;
+  if (existingId && String(existingObjectId) === String(existingId)) {
     return;
   }
 
@@ -95,45 +85,41 @@ async function createDevice(data) {
 }
 
 async function updateDevice(id, data) {
-  const device = await Device.findOne({
-    where: buildDeviceLookup(id)
-  });
+  const device = await Device.findOne(buildDeviceLookup(id));
 
-  if (!device || device.isActive === false) {
+  if (!device) {
     throw createError('Device not found', 404);
   }
 
   const payload = sanitizeDeviceInput(data);
   if (payload.deviceId && payload.deviceId !== device.deviceId) {
-    await ensureDeviceIdIsUnique(payload.deviceId, device.id);
+    await ensureDeviceIdIsUnique(payload.deviceId, device.id || device._id);
   }
 
-  await device.update(payload);
+  Object.assign(device, payload);
+  await device.save();
 
   return formatDeviceResponse(device);
 }
 
 async function deleteDevice(id) {
-  const device = await Device.findOne({
-    where: buildDeviceLookup(id)
-  });
+  const device = await Device.findOne(buildDeviceLookup(id));
 
-  if (!device || device.isActive === false) {
+  if (!device) {
     throw createError('Device not found', 404);
   }
 
-  await device.update({ isActive: false });
+  device.isActive = false;
+  await device.save();
 
   return formatDeviceResponse(device);
 }
 
 async function updateHeartbeat(deviceId, options = {}) {
   const now = options.timestamp ? new Date(options.timestamp) : new Date();
-  const device = await Device.findOne({
-    where: {
-      deviceId,
-      isActive: true
-    }
+  let device = await Device.findOne({
+    deviceId,
+    isActive: true
   });
 
   if (!device) {
@@ -141,7 +127,7 @@ async function updateHeartbeat(deviceId, options = {}) {
       throw createError('Device not found', 404);
     }
 
-    const createdDevice = await Device.create({
+    device = await Device.create({
       deviceId,
       name: options.name || deviceId,
       expectedInterval: options.defaultExpectedInterval || 60,
@@ -149,15 +135,18 @@ async function updateHeartbeat(deviceId, options = {}) {
       metadata: options.metadata || {}
     });
 
-    return formatDeviceResponse(createdDevice, now);
+    return formatDeviceResponse(device, now);
   }
 
-  await device.update({ lastHeartbeat: now });
+  device.lastHeartbeat = now;
+  await device.save();
+
+  const formattedDevice = formatDeviceResponse(device, now);
 
   try {
     const alertService = require('./alert-service');
     await alertService.resolveActiveAlertForDevice(deviceId, {
-      device: formatDeviceResponse(device, now),
+      device: formattedDevice,
       resolvedAt: now,
       sendRecoveryEmail: process.env.SEND_RECOVERY_EMAILS === 'true'
     });
@@ -165,7 +154,7 @@ async function updateHeartbeat(deviceId, options = {}) {
     console.error(`Failed to auto-resolve alert for ${deviceId}`, error);
   }
 
-  return formatDeviceResponse(device, now);
+  return formattedDevice;
 }
 
 module.exports = {

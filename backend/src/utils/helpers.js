@@ -3,19 +3,15 @@ function toPlainObject(record) {
     return record;
   }
 
-  if (typeof record.get === 'function') {
-    return record.get({ plain: true });
-  }
-
   if (typeof record.toJSON === 'function') {
     return record.toJSON();
   }
 
-  return record;
-}
+  if (typeof record.toObject === 'function') {
+    return record.toObject();
+  }
 
-function getValue(record, camelKey, snakeKey) {
-  return record[camelKey] !== undefined ? record[camelKey] : record[snakeKey];
+  return record;
 }
 
 function calculateDeviceStatus(device, now = new Date()) {
@@ -25,8 +21,8 @@ function calculateDeviceStatus(device, now = new Date()) {
     return null;
   }
 
-  const lastHeartbeat = getValue(plainDevice, 'lastHeartbeat', 'last_heartbeat');
-  const expectedInterval = Number(getValue(plainDevice, 'expectedInterval', 'expected_interval'));
+  const lastHeartbeat = plainDevice.lastHeartbeat;
+  const expectedInterval = Number(plainDevice.expectedInterval);
 
   if (!lastHeartbeat) {
     return 'pending';
@@ -48,8 +44,18 @@ function formatDeviceResponse(device, now = new Date()) {
     return null;
   }
 
+  const id = plainDevice.id || plainDevice._id;
+
   return {
-    ...plainDevice,
+    id: id ? String(id) : undefined,
+    deviceId: plainDevice.deviceId,
+    name: plainDevice.name,
+    expectedInterval: plainDevice.expectedInterval,
+    lastHeartbeat: plainDevice.lastHeartbeat,
+    isActive: plainDevice.isActive,
+    metadata: plainDevice.metadata || {},
+    createdAt: plainDevice.createdAt,
+    updatedAt: plainDevice.updatedAt,
     status: calculateDeviceStatus(plainDevice, now)
   };
 }

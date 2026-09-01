@@ -72,21 +72,26 @@ describe('mqtt listener integration with mock broker', () => {
     client.emit(
       'message',
       'devices/device-1/telemetry',
-      Buffer.from(JSON.stringify({
-        temperature: 24.5,
-        humidity: 55,
-        pressure: 1013,
-        timestamp: '2026-09-01T10:00:00Z',
-        battery: 85
-      }))
+      Buffer.from(
+        JSON.stringify({
+          temperature: 24.5,
+          humidity: 55,
+          pressure: 1013,
+          timestamp: '2026-09-01T10:00:00Z',
+          battery: 85
+        })
+      )
     );
 
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(deviceService.updateHeartbeat).toHaveBeenCalledWith('device-1', expect.objectContaining({
-      autoCreate: true,
-      defaultExpectedInterval: 60
-    }));
+    expect(deviceService.updateHeartbeat).toHaveBeenCalledWith(
+      'device-1',
+      expect.objectContaining({
+        autoCreate: true,
+        defaultExpectedInterval: 60
+      })
+    );
     expect(socketService.broadcastDeviceHeartbeat).toHaveBeenCalledWith(
       expect.objectContaining({
         deviceId: 'device-1',

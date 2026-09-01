@@ -1,0 +1,10 @@
+.status-badge {
+  border: 1px solid;
+  font-weight: 700;
+  text-transform: capitalize;
+  box-shadow: var(--clay-shadow-raised-sm);
+}
+
+.status-badge-icon {
+  font-size: 10px !important;
+}

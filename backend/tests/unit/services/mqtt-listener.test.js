@@ -66,7 +66,9 @@ describe('mqtt-listener', () => {
   });
 
   it('rejects non-object JSON payloads', () => {
-    expect(() => parseTelemetryPayload(Buffer.from('[1,2]'))).toThrow('Payload must be a JSON object');
+    expect(() => parseTelemetryPayload(Buffer.from('[1,2]'))).toThrow(
+      'Payload must be a JSON object'
+    );
   });
 
   it('connects and subscribes to telemetry topic', () => {
@@ -105,10 +107,13 @@ describe('mqtt-listener', () => {
     );
 
     expect(result).toBe(updatedDevice);
-    expect(deviceService.updateHeartbeat).toHaveBeenCalledWith('device-1', expect.objectContaining({
-      autoCreate: false,
-      defaultExpectedInterval: 60
-    }));
+    expect(deviceService.updateHeartbeat).toHaveBeenCalledWith(
+      'device-1',
+      expect.objectContaining({
+        autoCreate: false,
+        defaultExpectedInterval: 60
+      })
+    );
     expect(socketService.broadcastDeviceHeartbeat).toHaveBeenCalledWith(updatedDevice, {
       temperature: 24.5,
       humidity: 55
@@ -121,8 +126,12 @@ describe('mqtt-listener', () => {
     };
     const listener = makeListener({ deviceService });
 
-    await expect(listener.handleMessage('devices/device-1/state', Buffer.from('{}'))).resolves.toBeNull();
-    await expect(listener.handleMessage('devices/device-1/telemetry', Buffer.from('bad-json'))).resolves.toBeNull();
+    await expect(
+      listener.handleMessage('devices/device-1/state', Buffer.from('{}'))
+    ).resolves.toBeNull();
+    await expect(
+      listener.handleMessage('devices/device-1/telemetry', Buffer.from('bad-json'))
+    ).resolves.toBeNull();
     expect(deviceService.updateHeartbeat).not.toHaveBeenCalled();
   });
 

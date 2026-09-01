@@ -47,6 +47,22 @@ function broadcastDeviceHeartbeat(device, telemetry = {}) {
   return true;
 }
 
+function emitToAll(eventName, payload) {
+  if (!io) {
+    return false;
+  }
+
+  io.emit(eventName, payload);
+  return true;
+}
+
+function emitAlert(alert) {
+  return emitToAll('alert:created', {
+    alert,
+    timestamp: new Date().toISOString()
+  });
+}
+
 function closeSocket() {
   if (io) {
     io.close();
@@ -57,6 +73,8 @@ function closeSocket() {
 module.exports = {
   broadcastDeviceHeartbeat,
   closeSocket,
+  emitAlert,
+  emitToAll,
   getSocketServer,
   initializeSocket
 };

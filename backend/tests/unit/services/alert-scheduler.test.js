@@ -8,7 +8,7 @@ function makeDevice(overrides = {}) {
     expectedInterval: 60,
     lastHeartbeat: new Date(Date.now() - 120000),
     isActive: true,
-    get() {
+    toJSON() {
       return {
         id: this.id,
         deviceId: this.deviceId,
@@ -27,22 +27,26 @@ describe('alert-scheduler', () => {
     const device = makeDevice();
     const alertService = {
       createAlertForDevice: jest.fn().mockResolvedValue({ id: 'alert-1' }),
-      getActiveAlertForDevice: jest.fn()
+      getActiveAlertForDevice: jest
+        .fn()
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ id: 'alert-1' }),
       resolveActiveAlertForDevice: jest.fn()
     };
     const scheduler = new AlertScheduler({
-      deviceModel: { findAll: jest.fn().mockResolvedValue([device]) },
+      deviceModel: { find: jest.fn().mockResolvedValue([device]) },
       alertService,
       logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() }
     });
 
     const summary = await scheduler.checkDevices(new Date());
 
-    expect(alertService.createAlertForDevice).toHaveBeenCalledWith(expect.objectContaining({
-      deviceId: 'device-1'
-    }), expect.any(Object));
+    expect(alertService.createAlertForDevice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deviceId: 'device-1'
+      }),
+      expect.any(Object)
+    );
     expect(summary.created).toBe(1);
   });
 
@@ -54,7 +58,7 @@ describe('alert-scheduler', () => {
       resolveActiveAlertForDevice: jest.fn()
     };
     const scheduler = new AlertScheduler({
-      deviceModel: { findAll: jest.fn().mockResolvedValue([device]) },
+      deviceModel: { find: jest.fn().mockResolvedValue([device]) },
       alertService,
       logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() }
     });
@@ -73,16 +77,19 @@ describe('alert-scheduler', () => {
       resolveActiveAlertForDevice: jest.fn().mockResolvedValue({ id: 'alert-1' })
     };
     const scheduler = new AlertScheduler({
-      deviceModel: { findAll: jest.fn().mockResolvedValue([device]) },
+      deviceModel: { find: jest.fn().mockResolvedValue([device]) },
       alertService,
       logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() }
     });
 
     const summary = await scheduler.checkDevices(new Date());
 
-    expect(alertService.resolveActiveAlertForDevice).toHaveBeenCalledWith('device-1', expect.objectContaining({
-      device: expect.objectContaining({ deviceId: 'device-1' })
-    }));
+    expect(alertService.resolveActiveAlertForDevice).toHaveBeenCalledWith(
+      'device-1',
+      expect.objectContaining({
+        device: expect.objectContaining({ deviceId: 'device-1' })
+      })
+    );
     expect(summary.resolved).toBe(1);
   });
 });

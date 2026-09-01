@@ -1,28 +1,38 @@
 jest.mock('../../../src/models', () => ({
   Device: {
     create: jest.fn(),
-    findAll: jest.fn(),
+    find: jest.fn(),
     findOne: jest.fn()
+  },
+  mongoose: {
+    Types: {
+      ObjectId: {
+        isValid: jest.fn(() => false)
+      }
+    }
   }
+}));
+
+jest.mock('../../../src/services/alert-service', () => ({
+  resolveActiveAlertForDevice: jest.fn()
 }));
 
 const { Device } = require('../../../src/models');
 const deviceService = require('../../../src/services/device-service');
 
 function makeDevice(overrides = {}) {
-  const device = {
-    id: '11111111-1111-1111-1111-111111111111',
+  return {
+    id: '111111111111111111111111',
     deviceId: 'device-1',
     name: 'Device 1',
     expectedInterval: 60,
     lastHeartbeat: new Date(),
     isActive: true,
     metadata: {},
-    update: jest.fn(async function update(payload) {
-      Object.assign(this, payload);
+    save: jest.fn(async function save() {
       return this;
     }),
-    get() {
+    toJSON() {
       return {
         id: this.id,
         deviceId: this.deviceId,
@@ -35,8 +45,12 @@ function makeDevice(overrides = {}) {
     },
     ...overrides
   };
+}
 
-  return device;
+function mockFindResult(value) {
+  Device.find.mockReturnValue({
+    sort: jest.fn().mockResolvedValue(value)
+  });
 }
 
 describe('device-service', () => {
@@ -46,17 +60,14 @@ describe('device-service', () => {
 
   describe('getAllDevices', () => {
     it('returns active devices with computed status', async () => {
-      Device.findAll.mockResolvedValue([
+      mockFindResult([
         makeDevice({ lastHeartbeat: new Date() }),
         makeDevice({ deviceId: 'device-2', lastHeartbeat: null })
       ]);
 
       const devices = await deviceService.getAllDevices();
 
-      expect(Device.findAll).toHaveBeenCalledWith({
-        where: { isActive: true },
-        order: [['createdAt', 'DESC']]
-      });
+      expect(Device.find).toHaveBeenCalledWith({ isActive: true });
       expect(devices).toHaveLength(2);
       expect(devices[0].status).toBe('online');
       expect(devices[1].status).toBe('pending');
@@ -106,11 +117,13 @@ describe('device-service', () => {
     it('throws 409 for duplicate deviceId', async () => {
       Device.findOne.mockResolvedValue(makeDevice());
 
-      await expect(deviceService.createDevice({
-        deviceId: 'device-1',
-        name: 'Device 1',
-        expectedInterval: 60
-      })).rejects.toMatchObject({
+      await expect(
+        deviceService.createDevice({
+          deviceId: 'device-1',
+          name: 'Device 1',
+          expectedInterval: 60
+        })
+      ).rejects.toMatchObject({
         statusCode: 409,
         message: 'Device ID already exists'
       });
@@ -127,10 +140,7 @@ describe('device-service', () => {
         expectedInterval: 120
       });
 
-      expect(existingDevice.update).toHaveBeenCalledWith({
-        name: 'Updated Device',
-        expectedInterval: 120
-      });
+      expect(existingDevice.save).toHaveBeenCalled();
       expect(device.name).toBe('Updated Device');
       expect(device.expectedInterval).toBe(120);
     });
@@ -143,7 +153,7 @@ describe('device-service', () => {
 
       const device = await deviceService.deleteDevice('device-1');
 
-      expect(existingDevice.update).toHaveBeenCalledWith({ isActive: false });
+      expect(existingDevice.save).toHaveBeenCalled();
       expect(device.isActive).toBe(false);
     });
   });
