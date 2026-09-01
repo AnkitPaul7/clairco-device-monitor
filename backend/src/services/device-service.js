@@ -127,10 +127,41 @@ async function deleteDevice(id) {
   return formatDeviceResponse(device);
 }
 
+async function updateHeartbeat(deviceId, options = {}) {
+  const now = options.timestamp ? new Date(options.timestamp) : new Date();
+  const device = await Device.findOne({
+    where: {
+      deviceId,
+      isActive: true
+    }
+  });
+
+  if (!device) {
+    if (!options.autoCreate) {
+      throw createError('Device not found', 404);
+    }
+
+    const createdDevice = await Device.create({
+      deviceId,
+      name: options.name || deviceId,
+      expectedInterval: options.defaultExpectedInterval || 60,
+      lastHeartbeat: now,
+      metadata: options.metadata || {}
+    });
+
+    return formatDeviceResponse(createdDevice, now);
+  }
+
+  await device.update({ lastHeartbeat: now });
+
+  return formatDeviceResponse(device, now);
+}
+
 module.exports = {
   createDevice,
   deleteDevice,
   getAllDevices,
   getDeviceById,
+  updateHeartbeat,
   updateDevice
 };
