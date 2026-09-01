@@ -154,6 +154,17 @@ async function updateHeartbeat(deviceId, options = {}) {
 
   await device.update({ lastHeartbeat: now });
 
+  try {
+    const alertService = require('./alert-service');
+    await alertService.resolveActiveAlertForDevice(deviceId, {
+      device: formatDeviceResponse(device, now),
+      resolvedAt: now,
+      sendRecoveryEmail: process.env.SEND_RECOVERY_EMAILS === 'true'
+    });
+  } catch (error) {
+    console.error(`Failed to auto-resolve alert for ${deviceId}`, error);
+  }
+
   return formatDeviceResponse(device, now);
 }
 

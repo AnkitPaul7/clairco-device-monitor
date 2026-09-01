@@ -1,0 +1,11 @@
+Device alert notification
+
+Device name: {{deviceName}}
+Device ID: {{deviceId}}
+Expected interval: {{expectedInterval}} seconds
+Last heartbeat: {{lastHeartbeat}}
+Time elapsed: {{timeSinceLastHeartbeat}}
+Alert timestamp: {{alertTimestamp}}
+Status: {{alertStatus}}
+
+{{alertMessage}}
