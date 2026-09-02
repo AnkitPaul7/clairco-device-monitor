@@ -2,6 +2,8 @@
 
 A real-time IoT device monitoring platform for smart-building sensors (air quality, HVAC, occupancy, etc). Devices publish heartbeat/telemetry over MQTT, the backend tracks online/offline status and raises email + in-app alerts when a device misses its expected check-in interval, and the React dashboard shows live device health, alert history, and trends.
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design write-up and key technical decisions.
+
 ## Architecture
 
 This is a single repository containing two independently run applications:
@@ -78,7 +80,7 @@ cp frontend/.env.example frontend/.env
 
 Vite only exposes env vars prefixed `VITE_` to client code (read via `import.meta.env.VITE_*`, see `frontend/src/config/index.js`) — this is a Vite convention, not optional.
 
-The frontend's dev server is pinned to port **3000** in `vite.config.js` (Vite's own default is `5173`); the backend defaults to port **5000**. They're independent processes — nothing proxies one through the other in dev mode, they simply talk over the URLs above.
+The frontend's dev server is pinned to port **3000** in `vite.config.mjs` (Vite's own default is `5173`); the backend defaults to port **5000**. They're independent processes — nothing proxies one through the other in dev mode, they simply talk over the URLs above.
 
 ## 3. Start MongoDB
 
