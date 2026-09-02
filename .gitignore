@@ -23,7 +23,7 @@ backend/logs/
 build/
 dist/
 coverage/
-frontend/build/
+frontend/dist/
 
 # Runtime and cache
 .cache/

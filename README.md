@@ -9,9 +9,9 @@ This is a single repository containing two independently run applications:
 | App | Tech | Default port |
 | --- | --- | --- |
 | `backend/` | Node.js, Express, MongoDB (Mongoose), MQTT, Socket.IO | `5000` |
-| `frontend/` | React 18, MUI v5, Socket.IO client | `3000` |
+| `frontend/` | React 18 + Vite, MUI v5, Socket.IO client | `3000` |
 
-They are **not** run with one command — you start each in its own terminal, and the frontend talks to the backend over HTTP/WebSocket using the URLs in its `.env` file. There is no shared root `package.json`.
+Each app has its own `package.json`/`node_modules`/`.env` and is run independently, from inside its own folder — there is no root `package.json`. The frontend talks to the backend purely over HTTP/WebSocket using the URLs in its `.env`; nothing proxies one through the other.
 
 ```
 Device / sensor  --MQTT-->  Mosquitto broker  --MQTT-->  backend (mqtt-listener)
@@ -38,7 +38,7 @@ git clone <this-repo-url>
 cd clairco-device-monitor
 ```
 
-Install each app's dependencies separately (they have independent `package.json` files and lockfiles):
+Install each app's dependencies separately — they're independent projects:
 
 ```bash
 cd backend && npm install
@@ -72,11 +72,13 @@ cp frontend/.env.example frontend/.env
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `REACT_APP_API_URL` | Backend base URL for REST calls | `http://localhost:5000` |
-| `REACT_APP_WS_URL` | Backend URL for the Socket.IO connection | `http://localhost:5000` |
-| `REACT_APP_API_KEY` | Must match the backend's `API_KEY`. Leave blank if the backend has no key set | _(blank)_ |
+| `VITE_API_URL` | Backend base URL for REST calls | `http://localhost:5000` |
+| `VITE_WS_URL` | Backend URL for the Socket.IO connection | `ws://localhost:5000` |
+| `VITE_API_KEY` | Must match the backend's `API_KEY`. Leave blank if the backend has no key set | _(blank)_ |
 
-The frontend's dev server always runs on port **3000** (`react-scripts start`); the backend defaults to port **5000**. They're independent processes — nothing proxies one through the other in dev mode, they simply talk over the URLs above.
+Vite only exposes env vars prefixed `VITE_` to client code (read via `import.meta.env.VITE_*`, see `frontend/src/config/index.js`) — this is a Vite convention, not optional.
+
+The frontend's dev server is pinned to port **3000** in `vite.config.js` (Vite's own default is `5173`); the backend defaults to port **5000**. They're independent processes — nothing proxies one through the other in dev mode, they simply talk over the URLs above.
 
 ## 3. Start MongoDB
 
@@ -95,34 +97,30 @@ npm run seed
 
 This clears existing devices/alerts and inserts three demo sensors (`SENSOR-001`, `SENSOR-002`, `SENSOR-003`) so the dashboard isn't empty on first run.
 
-## 5. Run the backend
+## 5. Run both apps
+
+Each app is started from inside its own folder, in its own terminal:
 
 ```bash
-cd backend
-npm run dev      # nodemon, auto-restarts on changes
-# or: npm start   # plain node, no watch
+cd backend && npm run dev     # terminal 1 — nodemon, port 5000
+```
+```bash
+cd frontend && npm run dev    # terminal 2 — Vite dev server, port 3000
 ```
 
-You should see `MongoDB connected` and `Clairco Device Monitoring API listening on port 5000`. Check it's healthy:
+You should see `MongoDB connected` and `Clairco Device Monitoring API listening on port 5000` from the backend, then the frontend compiling and opening `http://localhost:3000` — Dashboard shows the seeded devices (status "pending" until they send a heartbeat).
+
+If no MQTT broker is reachable, you'll see MQTT connection errors retrying in the backend logs — that's expected and harmless; the REST API and dashboard don't depend on MQTT being connected.
+
+Check the backend's healthy independently at any time:
 
 ```bash
 curl http://localhost:5000/health
 ```
 
-If no MQTT broker is reachable, you'll see MQTT connection errors retrying in the background — that's expected and harmless; the REST API and dashboard don't depend on MQTT being connected.
+**Accessing the frontend from another device on your network** (e.g. `http://192.168.x.x:3000` instead of `localhost:3000`) works out of the box in development — the backend's CORS is wide open unless `NODE_ENV=production`, in which case only the origins listed in `FRONTEND_URL` are allowed.
 
-## 6. Run the frontend
-
-In a second terminal:
-
-```bash
-cd frontend
-npm start
-```
-
-This opens `http://localhost:3000`. You should see the Dashboard with the seeded devices (status "pending" until they send a heartbeat).
-
-## 7. (Optional) Simulate device telemetry over MQTT
+## 6. (Optional) Simulate device telemetry over MQTT
 
 If you have Mosquitto (or another broker) running locally on port `1883`, publish a test heartbeat for one of the seeded devices:
 
@@ -153,8 +151,10 @@ API_KEY=your-shared-secret docker-compose up --build
 
 ```bash
 cd backend && npm test    # Jest — unit + integration suites
-cd frontend && npm test   # React Testing Library
+cd frontend && npm test   # Vitest + React Testing Library
 ```
+
+Frontend production build: `npm run build` (outputs to `frontend/dist/`), preview it locally with `npm run preview`.
 
 Backend linting/formatting: `npm run lint` / `npm run format` in either `backend/` or `frontend/` (both use ESLint + Prettier).
 
@@ -187,4 +187,4 @@ frontend/
 
 ## Notes on authentication
 
-The API ships with a lightweight shared-secret scheme, not a full login system: set `API_KEY` on the backend and the matching `REACT_APP_API_KEY` on the frontend, and every request must send it in the `x-api-key` header (the frontend's axios client does this automatically). If `API_KEY` is left blank, the backend accepts all requests unauthenticated — convenient for local development, but only appropriate on a trusted network.
+The API ships with a lightweight shared-secret scheme, not a full login system: set `API_KEY` on the backend and the matching `VITE_API_KEY` on the frontend, and every request must send it in the `x-api-key` header (the frontend's axios client does this automatically). If `API_KEY` is left blank, the backend accepts all requests unauthenticated — convenient for local development, but only appropriate on a trusted network.

@@ -1,11 +1,12 @@
 const { Server } = require('socket.io');
+const { corsOriginHandler } = require('../config/cors');
 
 let io = null;
 
 function initializeSocket(server, options = {}) {
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || '*',
+      origin: corsOriginHandler,
       methods: ['GET', 'POST', 'PUT', 'DELETE']
     },
     ...options

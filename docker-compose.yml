@@ -48,9 +48,9 @@ services:
     build:
       context: ./frontend
       args:
-        REACT_APP_API_URL: http://localhost:5000
-        REACT_APP_WS_URL: ws://localhost:5000
-        REACT_APP_API_KEY: ${API_KEY:-}
+        VITE_API_URL: http://localhost:5000
+        VITE_WS_URL: ws://localhost:5000
+        VITE_API_KEY: ${API_KEY:-}
     container_name: clairco-frontend
     restart: unless-stopped
     ports:
